@@ -1,93 +1,21 @@
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
-
-from .graph.agent import build_agent
-
-app = FastAPI(title="Realty Riches AI Sales Agent")
-agent = build_agent()
+from app.graph.agent import agent
 
 
-class ChatRequest(BaseModel):
-    message: str
-    history: list[dict[str, str]] = Field(default_factory=list)
-    prospect_id: str | None = None
-    conversation_id: str | None = None
+def run_agent(message: str, *, prospect_id: str | None = None,
+              conversation_id: str | None = None, previous_state: dict | None = None):
+    state = dict(previous_state or {})
+    state["prospect_id"] = prospect_id or state.get("prospect_id")
+    state["conversation_id"] = conversation_id or state.get("conversation_id")
+    messages = list(state.get("messages", []))
+    messages.append({"role": "user", "content": message})
+    state["messages"] = messages
+    result = agent.invoke(state)
+    result["messages"] = list(result.get("messages", [])) + [{"role": "assistant", "content": result["response"]}]
+    return result
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/chat")
-def chat(request: ChatRequest):
-
-    messages = list(request.history)
-
-    messages.append({
-        "role": "user",
-        "content": request.message,
-    })
-
-    result = agent.invoke({
-
-        "prospect_id": request.prospect_id,
-
-        "conversation_id":
-            request.conversation_id,
-
-        "messages": messages,
-
-        "lead_created": False,
-    })
-
-    return {
-
-        "reply":
-            result["messages"][-1]["content"],
-
-        "history":
-            result["messages"],
-
-        "requirements": {
-
-            "intent":
-                result.get("intent"),
-
-            "city":
-                result.get("city"),
-
-            "locality":
-                result.get("locality"),
-
-            "property_type":
-                result.get("property_type"),
-
-            "bedrooms":
-                result.get("bedrooms"),
-
-            "budget_min":
-                result.get("budget_min"),
-
-            "budget_max":
-                result.get("budget_max"),
-
-            "timeline":
-                result.get("timeline"),
-        },
-
-        "lead_id":
-            result.get("lead_id"),
-
-        "lead_created":
-            result.get(
-                "lead_created",
-                False
-            ),
-
-        "matched_properties":
-            result.get(
-                "matched_properties",
-                []
-            ),
-    }
+if __name__ == "__main__":
+    result = run_agent("I want to sell my house in Sector 66B Mohali.")
+    print("Intent:", result.get("intent"))
+    print("Response:", result.get("response"))
+    print("Lead ID:", result.get("lead_id"))
+    print("Matches:", len(result.get("matched_properties", [])))

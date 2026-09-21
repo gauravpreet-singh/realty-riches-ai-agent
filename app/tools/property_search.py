@@ -1,51 +1,71 @@
 from typing import Any
 
-from ..db import supabase
+from app.db import supabase
 
 
 def search_properties(
-    *,
     city: str | None = None,
     locality: str | None = None,
     property_type: str | None = None,
-    min_price: int | None = None,
-    max_price: int | None = None,
     bedrooms: int | None = None,
-    limit: int = 8,
+    budget_min: int | None = None,
+    budget_max: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Search published properties using deterministic structured filters.
 
-    Important: price=0 is treated as unknown, so it is never considered
-    budget-compatible when a price ceiling is supplied.
-    """
     query = (
-        supabase.table("properties")
-        .select(
-            "id,title,property_type,location,location_slug,city,price,"
-            "area,bedrooms,bathrooms,description,possession,status"
-        )
+        supabase
+        .table("properties")
+        .select("*")
         .eq("status", "published")
     )
 
+    # City
     if city:
         query = query.ilike("city", f"%{city}%")
 
-    if locality:
-        query = query.ilike("location", f"%{locality}%")
-
+    # Property type
     if property_type:
-        query = query.ilike("property_type", property_type)
+        query = query.ilike("property_type", f"%{property_type}%")
 
+    # Bedrooms
     if bedrooms is not None:
         query = query.eq("bedrooms", bedrooms)
 
-    # Apply a lower bound only to known prices.
-    if min_price is not None:
-        query = query.gte("price", min_price)
+    # Budget
+    # price=0 means unknown, so exclude it when budget is specified.
+    if budget_min is not None:
+        query = query.gt("price", 0).gte("price", budget_min)
 
-    # Exclude unknown prices when the caller supplied a budget ceiling.
-    if max_price is not None:
-        query = query.gt("price", 0).lte("price", max_price)
+    if budget_max is not None:
+        query = query.gt("price", 0).lte("price", budget_max)
 
-    response = query.limit(limit).execute()
-    return response.data or []
+    # Fetch city/type/budget/bedroom candidates first.
+    response = query.limit(100).execute()
+
+    properties = response.data or []
+
+    # Locality is handled after retrieval because the current schema
+    # does not consistently store sector/locality in the `location` column.
+    if locality:
+        locality_normalized = locality.lower().strip()
+
+        def locality_matches(property: dict[str, Any]) -> bool:
+            searchable_text = " ".join(
+                str(property.get(field) or "")
+                for field in [
+                    "title",
+                    "location",
+                    "location_slug",
+                    "description",
+                ]
+            ).lower()
+
+            return locality_normalized in searchable_text
+
+        properties = [
+            property
+            for property in properties
+            if locality_matches(property)
+        ]
+
+    return properties[:10]
