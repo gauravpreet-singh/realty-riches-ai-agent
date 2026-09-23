@@ -30,6 +30,9 @@ class AgentState(TypedDict, total=False):
     seller_reason: str | None
 
     matched_properties: list[dict[str, Any]]
+    match_found: bool
     lead_id: str | None
     seller_property_id: str | None
+    lead_status: str | None
+    follow_up_id: str | None
     response: str
