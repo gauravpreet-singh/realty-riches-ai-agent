@@ -4,7 +4,7 @@ from typing import Any
 from app.db import supabase
 
 
-def create_conversation(prospect_id: str | None = None, channel: str = "text") -> str:
+def create_conversation(prospect_id: str | None = None, channel: str = "web") -> str:
     data: dict[str, Any] = {"channel": channel}
     if prospect_id:
         data["prospect_id"] = prospect_id

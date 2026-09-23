@@ -3,14 +3,15 @@ from typing import Literal
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
+from app.db import supabase
 from app.graph.state import AgentState
+from app.matching.property_matcher import PropertyMatcher
 from app.tools.lead_tools import (
     create_follow_up,
     update_lead_status,
     upsert_lead,
     upsert_seller_property,
 )
-from app.tools.property_search import search_properties
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
@@ -144,14 +145,19 @@ Conversation:
 
 
 def match_properties(state: AgentState) -> dict:
-    properties = search_properties(
-        city=state.get("buyer_city"),
-        locality=state.get("buyer_locality"),
-        property_type=state.get("buyer_property_type"),
-        bedrooms=state.get("buyer_bedrooms"),
-        budget_min=state.get("buyer_budget_min"),
-        budget_max=state.get("buyer_budget_max"),
-    )
+    """Match the persisted buyer lead against published inventory.
+
+    Phase 6 matching is deterministic and runs after Phase 5 has extracted
+    the requirements and Phase 7 has upserted the lead. The matcher also
+    persists qualifying pairs in lead_property_matches.
+    """
+    lead_id = state.get("lead_id")
+    if not lead_id or state.get("intent") not in ("buy", "both"):
+        return {"matched_properties": [], "match_found": False}
+
+    matcher = PropertyMatcher(supabase)
+    properties = matcher.match_lead_to_properties(lead_id, threshold=70, limit=10)
+
     return {
         "matched_properties": properties,
         "match_found": bool(properties),

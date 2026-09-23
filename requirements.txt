@@ -6,3 +6,5 @@ python-dotenv
 pydantic>=2
 fastapi
 uvicorn[standard]
+twilio
+python-multipart

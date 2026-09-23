@@ -1,3 +1,5 @@
+from fastapi import FastAPI
+
 from app.graph.agent import agent
 from app.tools.conversation_tools import (
     create_conversation,
@@ -105,7 +107,7 @@ def _build_outcome(state: dict) -> str:
 
 if __name__ == "__main__":
     result = run_agent(
-        "I am looking to buy a 3 BHK in Mohali around 90 lakh."
+        "I want a 3 BHK in Sector 125 Kharar under 95 lakh."
     )
 
     print("Conversation ID:", result.get("conversation_id"))
@@ -113,3 +115,10 @@ if __name__ == "__main__":
     print("Response:", result.get("response"))
     print("Lead ID:", result.get("lead_id"))
     print("Matches:", len(result.get("matched_properties", [])))
+
+
+app = FastAPI(title="Realty Riches AI Agent")
+
+from telephony.twilio_webhooks import router as twilio_router
+
+app.include_router(twilio_router)
